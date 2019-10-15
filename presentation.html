@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+  <head>
+    <title>Forecasting pipelines in Supply Chain</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Alexandra Abos, Ph.D." />
+    <meta name="date" content="2019-10-15" />
+    <link rel="stylesheet" href="css\sanofi.css" type="text/css" />
+    <link rel="stylesheet" href="css\sanofi-fonts.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Forecasting pipelines in Supply Chain
+## Statistical Forecasting Department - Sanofi
+### Alexandra Abos, Ph.D.
+### Obryan Poyser, Ph.D. candidate
+### 2019-10-15
+
+---
+
+
+
+
+
+
+# Outline
+
+- Our team
+- Digitalization in Supply Chain
+- Forecasting pipelines
+  - State-of-art
+  - How do we perform demand forecasting at Sanofi?
+  - Business intelligence enrichment
+  - Key Performance Indicators (KPI's)
+  - Continuous improvement: Algorithm study
+  - Kinaxis
+- The future
+
+---
+# Our team
+
+
+
+---
+class: center, middle, inverse
+
+# Digitalization in Supply Chain
+
+
+
+
+
+---
+# Forecasting pipelines
+
+## State-of-art
+
+- Cross model forecasting average almost always outperform single model estimates
+- Dampened trends perform better at long horizons 
+- Forecasting competition findings
+  - Aim to improve forecasting performance
+  - 12 out of 17 best performers are combination of statistical approaches
+  - At the M4 the winner was an *hybrid* (statistical + ML) approach
+  - Pure ML methods performed poorly
+
+---
+## How do we perform demand forecasting at Sanofi?
+
+
+```r
+knitr::include_graphics("images/statfcst_diagram_1.png")
+```
+
+&lt;img src="images/statfcst_diagram_1.png" width="1384" /&gt;
+
+---
+
+.pl[
+
+
+```r
+*data("rainfall_cr", package = "fcsttools")
+```
+
+
+
+]
+
+
+---
+## How do we perform demand forecasting at Sanofi?
+### Cross-validation
+
+
+.pl[
+
+```r
+(cv &lt;- rainfall_cr %&gt;% 
+  cvts(data = ., cv_size = 10
+       , lead_time = 3
+*     , keep_prev=TRUE))
+```
+
+
+```
+## # A tibble: 10 x 3
+##     iter train              test            
+##    &lt;int&gt; &lt;list&gt;             &lt;list&gt;          
+##  1     1 &lt;tibble [188 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  2     2 &lt;tibble [189 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  3     3 &lt;tibble [190 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  4     4 &lt;tibble [191 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  5     5 &lt;tibble [192 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  6     6 &lt;tibble [193 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  7     7 &lt;tibble [194 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  8     8 &lt;tibble [195 x 3]&gt; &lt;tibble [3 x 3]&gt;
+##  9     9 &lt;tibble [196 x 3]&gt; &lt;tibble [3 x 3]&gt;
+## 10    10 &lt;tibble [197 x 3]&gt; &lt;tibble [3 x 3]&gt;
+```
+]
+
+
+--
+
+.pr[
+
+```r
+cv$train[[1]] %&gt;% tail(5)
+```
+
+```
+## # A tibble: 5 x 3
+##   country    date       rainfall_mm
+##   &lt;chr&gt;      &lt;date&gt;           &lt;dbl&gt;
+## 1 Costa Rica 2015-08-01        385.
+## 2 Costa Rica 2015-09-01        319.
+## 3 Costa Rica 2015-10-01        234.
+## 4 Costa Rica 2015-11-01        263.
+## 5 Costa Rica 2015-12-01        175.
+```
+
+```r
+cv$test[[1]]
+```
+
+```
+## # A tibble: 3 x 3
+##   country    date       rainfall_mm
+##   &lt;chr&gt;      &lt;date&gt;           &lt;dbl&gt;
+## 1 Costa Rica 2016-01-01        67.1
+## 2 Costa Rica 2016-02-01       152. 
+## 3 Costa Rica 2016-03-01        58.7
+```
+]
+
+
+---
+
+```r
+rainfall %&gt;% 
+  group_nest(country) %&gt;% 
+  filter(country %in% sample(country, size = 5)) %&gt;% 
+* mutate(cv=map(data, ~cvts(data = .x, cv_size = 6, lead_time = 3, keep_prev=TRUE)))
+```
+
+
+
+```
+## # A tibble: 5 x 3
+##   country       data               cv              
+##   &lt;chr&gt;         &lt;list&gt;             &lt;list&gt;          
+## 1 Colombia      &lt;tibble [312 x 2]&gt; &lt;tibble [6 x 3]&gt;
+## 2 Liechtenstein &lt;tibble [312 x 2]&gt; &lt;tibble [6 x 3]&gt;
+## 3 Niger         &lt;tibble [312 x 2]&gt; &lt;tibble [6 x 3]&gt;
+## 4 Timor Leste   &lt;tibble [312 x 2]&gt; &lt;tibble [6 x 3]&gt;
+## 5 Tuvalu        &lt;tibble [312 x 2]&gt; &lt;tibble [6 x 3]&gt;
+```
+
+
+---
+
+
+```r
+rainfall %&gt;% 
+  group_nest(country) %&gt;% 
+  filter(country %in% sample(country, size = 5)) %&gt;%
+  mutate(cv=map(data, ~cvts(data = .x, cv_size = 6, lead_time = 3, keep_prev=TRUE))) %&gt;% 
+* unnest(cv)
+```
+
+
+```
+## # A tibble: 30 x 5
+##    country       data                iter train             test           
+##    &lt;chr&gt;         &lt;list&gt;             &lt;int&gt; &lt;list&gt;            &lt;list&gt;         
+##  1 Colombia      &lt;tibble [312 x 2]&gt;     1 &lt;tibble [304 x 2~ &lt;tibble [3 x 2~
+##  2 Colombia      &lt;tibble [312 x 2]&gt;     2 &lt;tibble [305 x 2~ &lt;tibble [3 x 2~
+##  3 Colombia      &lt;tibble [312 x 2]&gt;     3 &lt;tibble [306 x 2~ &lt;tibble [3 x 2~
+##  4 Colombia      &lt;tibble [312 x 2]&gt;     4 &lt;tibble [307 x 2~ &lt;tibble [3 x 2~
+##  5 Colombia      &lt;tibble [312 x 2]&gt;     5 &lt;tibble [308 x 2~ &lt;tibble [3 x 2~
+##  6 Colombia      &lt;tibble [312 x 2]&gt;     6 &lt;tibble [309 x 2~ &lt;tibble [3 x 2~
+##  7 Liechtenstein &lt;tibble [312 x 2]&gt;     1 &lt;tibble [304 x 2~ &lt;tibble [3 x 2~
+##  8 Liechtenstein &lt;tibble [312 x 2]&gt;     2 &lt;tibble [305 x 2~ &lt;tibble [3 x 2~
+##  9 Liechtenstein &lt;tibble [312 x 2]&gt;     3 &lt;tibble [306 x 2~ &lt;tibble [3 x 2~
+## 10 Liechtenstein &lt;tibble [312 x 2]&gt;     4 &lt;tibble [307 x 2~ &lt;tibble [3 x 2~
+## # ... with 20 more rows
+```
+
+
+
+  
+---
+
+.pr.imgmiddle[
+&lt;img src="https://media1.tenor.com/images/42983a95657f874f62cfc1f1152da484/tenor.gif?itemid=8718500" width="200%" style="display: block; margin: auto;" /&gt;
+
+]
+
+
+---
+
+# Thanks!
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "solarized-dark",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9",
+"slideNumberFormat": "<div class=\"progress-bar-container\">   <div class=\"progress-bar\" style=\"width: calc(%current% / %total% * 100%);\">   </div> </div>` "
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
